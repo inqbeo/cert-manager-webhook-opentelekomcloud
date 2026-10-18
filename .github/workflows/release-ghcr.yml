@@ -1,0 +1,78 @@
+# On a tag vX.Y.Z: build and push the image and the Helm chart to ghcr.io of
+# the repository owner, after checking that the chart matches the tag.
+#   image: ghcr.io/<owner>/cert-manager-webhook-opentelekomcloud:vX.Y.Z
+#   chart: oci://ghcr.io/<owner>/charts/cert-manager-webhook-opentelekomcloud, version X.Y.Z
+name: Release to ghcr.io
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CHART_DIR: charts/cert-manager-webhook-opentelekomcloud
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the chart matches the tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="$(sed -n 's/^version: *//p' "$CHART_DIR/Chart.yaml" | tr -d '"')"
+          app_version="$(sed -n 's/^appVersion: *//p' "$CHART_DIR/Chart.yaml" | tr -d '"')"
+          image_tag="$(sed -n 's/^  tag: *//p' "$CHART_DIR/values.yaml" | tr -d '"')"
+          echo "tag=$tag chart version=$version appVersion=$app_version values image.tag=$image_tag"
+          [ "$tag" = "v$version" ] || { echo "::error::Chart.yaml version $version does not match tag $tag"; exit 1; }
+          [ "$tag" = "$app_version" ] || { echo "::error::Chart.yaml appVersion $app_version does not match tag $tag"; exit 1; }
+          [ "$tag" = "$image_tag" ] || { echo "::error::values.yaml image.tag $image_tag does not match tag $tag"; exit 1; }
+          echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Vet and unit tests
+        run: |
+          go vet ./...
+          go test -race -count=1 ./pkg/...
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ env.OWNER }}/cert-manager-webhook-opentelekomcloud
+          flavor: |
+            latest=false
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - uses: azure/setup-helm@v5
+
+      - name: Package and push the chart
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm package "$CHART_DIR" --destination dist
+          helm push dist/*.tgz "oci://ghcr.io/${OWNER}/charts"

@@ -102,6 +102,18 @@ helm upgrade --install $CHART_RELEASE_NAME cmw-otc/cert-manager-webhook-opentele
   --namespace cert-manager
 ```
 
+### From ghcr.io
+
+Each release `vX.Y.Z` is also published to the GitHub Container Registry, the chart as an OCI artifact and the image
+for `linux/amd64` and `linux/arm64`:
+
+```bash
+helm upgrade --install $CHART_RELEASE_NAME \
+  oci://ghcr.io/akyriako/charts/cert-manager-webhook-opentelekomcloud --version X.Y.Z \
+  --set image.repository=ghcr.io/akyriako/cert-manager-webhook-opentelekomcloud \
+  --namespace cert-manager
+```
+
 ## Usage
 
 ### Issuers & ClusterIssuers
@@ -312,3 +324,14 @@ $ OS_DEBUG=true OS_ACCESS_KEY={AccessKey} OS_SECRET_KEY={SecretKey} TEST_ZONE_NA
 > Fill in the values of `OS_ACCESS_KEY` and `OS_SECRET_KEY`. Replace `example.com.` with your own (sub)domain.
 > Make sure not to forget the trailing `.` in the `TEST_ZONE_NAME` value. You can omit any variable already defined
 > in your session's environment variables.
+
+### Releasing
+
+Pull requests and pushes to `master` run `.github/workflows/ci.yml`: `go vet`, unit tests, chart lint and an image
+build for both platforms, without publishing anything. To release `vX.Y.Z`:
+
+1. Set `version: X.Y.Z` and `appVersion: "vX.Y.Z"` in `Chart.yaml` and `image.tag: vX.Y.Z` in `values.yaml`, and merge.
+   The chart is published to the Helm repository on GitHub Pages as before.
+2. Push the tag `vX.Y.Z`. `.github/workflows/release-ghcr.yml` checks that the chart matches the tag, runs the tests,
+   and pushes the image (`vX.Y.Z`, and `latest` unless it is a pre-release such as `vX.Y.Z-rc.1`) and the chart to
+   `ghcr.io/<owner>`. Both packages are linked to this repository and take over its visibility.
