@@ -177,6 +177,19 @@ spec:
 
 Deploy the manifest above with `kubectl`.
 
+### TXT records and locking
+
+A certificate for a domain and its wildcard (e.g. `subdomain.example.com` and `*.subdomain.example.com`) needs two
+challenge values on the same name, `_acme-challenge.subdomain.example.com`, at the same time. Open Telekom Cloud DNS
+keeps all TXT values of a name in one record set, so the webhook adds its value to that record set and, when cleaning
+up, removes only its own value; the record set is deleted together with its last value.
+
+Because a record set can only be written as a whole, the webhook serializes its changes to one record set with a lock:
+while it changes `_acme-challenge.subdomain.example.com` it holds a short-lived TXT record set
+`_cert-manager-lock._acme-challenge.subdomain.example.com` in the same zone. This works across several webhook replicas
+and across clusters that use the same zone, and needs no permissions beyond the DNS ones. A lock left behind by a
+webhook that was killed while holding it is removed after 5 minutes.
+
 ## Development
 
 As mentioned already in the preface, this project is harnessing the versatilly of [Dev Containers](https://containers.dev) 
@@ -312,3 +325,10 @@ $ OS_DEBUG=true OS_ACCESS_KEY={AccessKey} OS_SECRET_KEY={SecretKey} TEST_ZONE_NA
 > Fill in the values of `OS_ACCESS_KEY` and `OS_SECRET_KEY`. Replace `example.com.` with your own (sub)domain.
 > Make sure not to forget the trailing `.` in the `TEST_ZONE_NAME` value. You can omit any variable already defined
 > in your session's environment variables.
+
+The unit tests in `pkg/dns` need no credentials (`go test ./pkg/...`). Additional live tests, which run several
+solvers concurrently against a real zone like several webhook replicas would, are behind the `live` build tag:
+
+```bash
+$ OS_ACCESS_KEY={AccessKey} OS_SECRET_KEY={SecretKey} TEST_ZONE_NAME=example.com. go test -tags live -v -timeout 60m ./pkg/dns/
+```

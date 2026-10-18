@@ -6,7 +6,6 @@ import (
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	golangsdk "github.com/opentelekomcloud/gophertelekomcloud"
 	"github.com/opentelekomcloud/gophertelekomcloud/openstack"
-	"github.com/opentelekomcloud/gophertelekomcloud/openstack/dns/v2/recordsets"
 	"github.com/opentelekomcloud/gophertelekomcloud/openstack/dns/v2/zones"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +14,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -81,6 +81,16 @@ func (s *OpenTelekomCloudDnsProviderSolver) setOpenTelekomCloudDnsServiceClient(
 	if err != nil {
 		return errors.Wrap(err, "creating an opentelekomcloud provider client failed")
 	}
+
+	// On 429 the SDK would replay a record set update unchanged after 60s,
+	// overwriting whatever changed in between. Fail instead: the caller reads
+	// the record set again and retries with current records.
+	noBackoffRetries, backoffRetryTimeout := 0, time.Duration(0)
+	providerClient.MaxBackoffRetries = &noBackoffRetries
+	providerClient.BackoffRetryTimeout = &backoffRetryTimeout
+
+	// Bounds every API call; the record set lock relies on it (see lock.go).
+	providerClient.HTTPClient.Timeout = apiCallTimeout
 
 	dnsServiceClient, err := openstack.NewDNSV2(providerClient, endpointOpts)
 	if err != nil {
@@ -162,28 +172,6 @@ func (s *OpenTelekomCloudDnsProviderSolver) getResolvedZone(ch *v1alpha1.Challen
 	}
 
 	return &allZones[zoneIdx], nil
-}
-
-func (s *OpenTelekomCloudDnsProviderSolver) getTxtRecordSetsByZone(ch *v1alpha1.ChallengeRequest, zone *zones.Zone) ([]recordsets.RecordSet, error) {
-	action := strings.ToLower(string(ch.Action))
-
-	recordsetsListOpts := recordsets.ListOpts{
-		Name: ch.ResolvedFQDN,
-		Type: txtRecordSetType,
-		Data: getQuotedString(ch.Key),
-	}
-
-	allRecordPages, err := recordsets.ListByZone(s.dnsClient, zone.ID, recordsetsListOpts).AllPages()
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("%s failed", action))
-	}
-
-	allRecordSets, err := recordsets.ExtractRecordSets(allRecordPages)
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("%s failed", action))
-	}
-
-	return allRecordSets, nil
 }
 
 func getQuotedString(s string) string {
