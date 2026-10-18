@@ -57,6 +57,11 @@ func (s *OpenTelekomCloudDnsProviderSolver) Present(ch *v1alpha1.ChallengeReques
 		return errors.Wrap(err, "present failed")
 	}
 
+	config, err := loadConfig(ch.Config)
+	if err != nil {
+		return errors.Wrap(err, "present failed")
+	}
+
 	zone, err := s.getResolvedZone(ch)
 	if err != nil {
 		return errors.Wrap(err, "present failed")
@@ -70,6 +75,7 @@ func (s *OpenTelekomCloudDnsProviderSolver) Present(ch *v1alpha1.ChallengeReques
 	if len(recordSets) > 0 {
 		var updateOpts recordsets.UpdateOpts
 		updateOpts.Records = []string{getQuotedString(ch.Key)}
+		updateOpts.TTL = config.TTL
 
 		_, err = recordsets.Update(s.dnsClient, zone.ID, recordSets[0].ID, updateOpts).Extract()
 		if err != nil {
@@ -83,6 +89,7 @@ func (s *OpenTelekomCloudDnsProviderSolver) Present(ch *v1alpha1.ChallengeReques
 	createOpts.Name = ch.ResolvedFQDN
 	createOpts.Type = txtRecordSetType
 	createOpts.Records = []string{getQuotedString(ch.Key)}
+	createOpts.TTL = config.TTL
 
 	_, err = recordsets.Create(s.dnsClient, zone.ID, createOpts).Extract()
 	if err != nil {

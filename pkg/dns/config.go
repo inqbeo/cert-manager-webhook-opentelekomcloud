@@ -30,6 +30,10 @@ type OpenTelekomCloudDnsProviderConfig struct {
 	ProjectName        string                    `json:"projectName,omitempty"`
 	AccessKeySecretRef *corev1.SecretKeySelector `json:"accessKeySecretRef,omitempty"`
 	SecretKeySecretRef *corev1.SecretKeySelector `json:"secretKeySecretRef,omitempty"`
+
+	// TTL in seconds of the challenge TXT record sets; 0 leaves it to the
+	// Open Telekom Cloud default (300).
+	TTL int `json:"ttl,omitempty"`
 }
 
 // OpenTelekomCloudDnsProviderSecrets is a structure that is used to load the credentials from
@@ -59,6 +63,12 @@ func loadConfig(cfgJSON *extapi.JSON) (OpenTelekomCloudDnsProviderConfig, error)
 	if err := json.Unmarshal(cfgJSON.Raw, &cfg); err != nil {
 		return cfg, fmt.Errorf("error decoding solver config: %v", err)
 	}
+	if cfg.TTL < 0 || cfg.TTL > maxTTL {
+		return cfg, fmt.Errorf("error decoding solver config: ttl %d is out of range, it must be between 1 and %d", cfg.TTL, maxTTL)
+	}
 
 	return cfg, nil
 }
+
+// maxTTL is the largest TTL Open Telekom Cloud DNS accepts.
+const maxTTL = 2147483647
