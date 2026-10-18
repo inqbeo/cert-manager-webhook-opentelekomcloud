@@ -30,6 +30,9 @@ Configure the Chart by setting the following parameters:
 - `opentelekomcloud.secretKey`: the secret key in plain text, **not required**
 - `opentelekomcloud.projectName`: the OTC project name in plain text, **not required**. When set, it is exposed to the
   webhook as environment variable `OS_PROJECT_NAME`; when empty, the variable is **not** added to the deployment
+- `securePort`: the port the webhook listens on inside the pod, defaults to `8443`. The `Service` keeps exposing
+  `service.port` (`443`). A port below `1024` needs root or the `NET_BIND_SERVICE` capability; with the default the
+  webhook runs without either, e.g. under OpenShift's `restricted-v2` SCC
 
 > [!NOTE]
 > The remaining chart variables are, besides self-explanatory, the same that used already by [cert-manager/webhook-example](https://github.com/cert-manager/webhook-example) 
@@ -63,6 +66,7 @@ container an additional argument to increase logging verbosity:
           args:
             - --tls-cert-file=/tls/tls.crt
             - --tls-private-key-file=/tls/tls.key
+            - --secure-port={{ .Values.securePort }}
             {{- if eq .Values.debug true }}
             - --v=4
             {{- end }}

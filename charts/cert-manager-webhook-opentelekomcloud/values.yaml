@@ -32,8 +32,6 @@ podSecurityContext:
 containerSecurityContext:
   allowPrivilegeEscalation: false
   capabilities:
-    add:
-      - NET_BIND_SERVICE
     drop:
       - ALL
   privileged: false
@@ -45,6 +43,11 @@ containerSecurityContext:
 service:
   type: ClusterIP
   port: 443
+
+# Port the webhook listens on inside the pod. Ports below 1024 need root or
+# the NET_BIND_SERVICE capability, which e.g. OpenShift's restricted SCC does
+# not grant to its non-root user; the Service still exposes service.port.
+securePort: 8443
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
