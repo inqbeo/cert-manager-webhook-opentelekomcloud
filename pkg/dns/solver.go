@@ -56,12 +56,17 @@ func (s *OpenTelekomCloudDnsProviderSolver) Present(ch *v1alpha1.ChallengeReques
 		return errors.Wrap(err, "present failed")
 	}
 
+	config, err := loadConfig(ch.Config)
+	if err != nil {
+		return errors.Wrap(err, "present failed")
+	}
+
 	zone, err := s.getResolvedZone(ch)
 	if err != nil {
 		return errors.Wrap(err, "present failed")
 	}
 
-	err = s.presentTxtValue(zone.ID, ch.ResolvedFQDN, getQuotedString(ch.Key))
+	err = s.presentTxtValue(zone.ID, ch.ResolvedFQDN, getQuotedString(ch.Key), config.TTL)
 	if err != nil {
 		return errors.Wrap(err, "present failed")
 	}

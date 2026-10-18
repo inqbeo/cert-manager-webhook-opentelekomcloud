@@ -24,8 +24,9 @@ var retryPause = func(attempt int) {
 	time.Sleep(time.Duration(attempt)*500*time.Millisecond + time.Duration(rand.Intn(500))*time.Millisecond)
 }
 
-// presentTxtValue makes sure value is one of the records of fqdn, keeping all others.
-func (s *OpenTelekomCloudDnsProviderSolver) presentTxtValue(zoneID, fqdn, value string) error {
+// presentTxtValue makes sure value is one of the records of fqdn, keeping all
+// others. A ttl of 0 leaves the record set's TTL as it is (or the default).
+func (s *OpenTelekomCloudDnsProviderSolver) presentTxtValue(zoneID, fqdn, value string, ttl int) error {
 	return s.converge(zoneID, fqdn, value,
 		func(rs *recordsets.RecordSet) bool {
 			return rs != nil && containsTxtValue(rs.Records, value)
@@ -37,13 +38,14 @@ func (s *OpenTelekomCloudDnsProviderSolver) presentTxtValue(zoneID, fqdn, value 
 					Name:    fqdn,
 					Type:    txtRecordSetType,
 					Records: []string{value},
+					TTL:     ttl,
 				}).Extract()
 				return err
 			}
 
 			records := append(append([]string{}, rs.Records...), value)
 			klog.V(verbosity).InfoS("updating txt record set", "fqdn", fqdn, "id", rs.ID, "records", records)
-			_, err := recordsets.Update(s.dnsClient, zoneID, rs.ID, recordsets.UpdateOpts{Records: records}).Extract()
+			_, err := recordsets.Update(s.dnsClient, zoneID, rs.ID, recordsets.UpdateOpts{Records: records, TTL: ttl}).Extract()
 			return err
 		},
 	)

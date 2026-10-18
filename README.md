@@ -143,6 +143,10 @@ spec:
 - `region`, although configurable and required, it can only be set to `eu-de`
 - `projectName`, optional, the OTC project name to scope the credentials against. **Leave it out of the `config` stanza
   if you don't need it**, it is only serialized when it has a value
+- `ttl`, optional, the TTL in seconds (`1` to `2147483647`) of the challenge TXT records. When left out, the Open
+  Telekom Cloud default of `300` applies. A short TTL such as `60` lets resolvers, including the CA's, see a new
+  challenge value sooner, e.g. when the challenges of a domain and its wildcard, which share one name, are validated
+  one after the other
 - `accessKeySecretRef` and `secretKeySecretRef` can be set in chart parameter `credentialsSecretRef`, if not defaults to `cert-manager-webhook-opentelekomcloud-creds`
 
 Deploy the manifest above with `kubectl`.
