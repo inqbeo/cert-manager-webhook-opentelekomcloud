@@ -177,6 +177,13 @@ spec:
 
 Deploy the manifest above with `kubectl`.
 
+### TXT records
+
+One name can carry several challenge values, e.g. `_acme-challenge.subdomain.example.com` for
+`subdomain.example.com` and `*.subdomain.example.com`. Open Telekom Cloud DNS keeps all TXT values of a name in one
+record set, so the webhook adds its value to that record set and, when cleaning up, removes only its own value; the
+record set is deleted together with its last value. Other record sets are never touched.
+
 ## Development
 
 As mentioned already in the preface, this project is harnessing the versatilly of [Dev Containers](https://containers.dev) 
@@ -312,3 +319,5 @@ $ OS_DEBUG=true OS_ACCESS_KEY={AccessKey} OS_SECRET_KEY={SecretKey} TEST_ZONE_NA
 > Fill in the values of `OS_ACCESS_KEY` and `OS_SECRET_KEY`. Replace `example.com.` with your own (sub)domain.
 > Make sure not to forget the trailing `.` in the `TEST_ZONE_NAME` value. You can omit any variable already defined
 > in your session's environment variables.
+
+The unit tests in `pkg/dns` need no credentials: `go test ./pkg/...`.

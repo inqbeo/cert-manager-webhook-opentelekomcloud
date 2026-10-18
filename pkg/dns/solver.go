@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	golangsdk "github.com/opentelekomcloud/gophertelekomcloud"
-	"github.com/opentelekomcloud/gophertelekomcloud/openstack/dns/v2/recordsets"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -62,29 +61,7 @@ func (s *OpenTelekomCloudDnsProviderSolver) Present(ch *v1alpha1.ChallengeReques
 		return errors.Wrap(err, "present failed")
 	}
 
-	recordSets, err := s.getTxtRecordSetsByZone(ch, zone)
-	if err != nil {
-		return errors.Wrap(err, "present failed")
-	}
-
-	if len(recordSets) > 0 {
-		var updateOpts recordsets.UpdateOpts
-		updateOpts.Records = []string{getQuotedString(ch.Key)}
-
-		_, err = recordsets.Update(s.dnsClient, zone.ID, recordSets[0].ID, updateOpts).Extract()
-		if err != nil {
-			return errors.Wrap(err, "present failed")
-		}
-
-		return nil
-	}
-
-	var createOpts recordsets.CreateOpts
-	createOpts.Name = ch.ResolvedFQDN
-	createOpts.Type = txtRecordSetType
-	createOpts.Records = []string{getQuotedString(ch.Key)}
-
-	_, err = recordsets.Create(s.dnsClient, zone.ID, createOpts).Extract()
+	err = s.presentTxtValue(zone.ID, ch.ResolvedFQDN, getQuotedString(ch.Key))
 	if err != nil {
 		return errors.Wrap(err, "present failed")
 	}
@@ -111,22 +88,7 @@ func (s *OpenTelekomCloudDnsProviderSolver) CleanUp(ch *v1alpha1.ChallengeReques
 		return errors.Wrap(err, "clean up failed")
 	}
 
-	recordSets, err := s.getTxtRecordSetsByZone(ch, zone)
-	if err != nil {
-		return errors.Wrap(err, "clean up failed")
-	}
-
-	if len(recordSets) == 0 {
-		klog.V(verbosity).Info(
-			fmt.Sprintf("clean up skipped: found 0 recordsets matching %s in zone %s",
-				ch.ResolvedFQDN,
-				ch.ResolvedZone),
-		)
-
-		return nil
-	}
-
-	err = recordsets.Delete(s.dnsClient, zone.ID, recordSets[0].ID).ExtractErr()
+	err = s.cleanUpTxtValue(zone.ID, ch.ResolvedFQDN, getQuotedString(ch.Key))
 	if err != nil {
 		return errors.Wrap(err, "clean up failed")
 	}
@@ -146,10 +108,7 @@ func (s *OpenTelekomCloudDnsProviderSolver) CleanUp(ch *v1alpha1.ChallengeReques
 // where a SIGTERM or similar signal is sent to the webhook process.
 func (s *OpenTelekomCloudDnsProviderSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
 	klog.V(verbosity).Info(fmt.Sprintf("initializing cert-manager-webhook-%s", solverReferenceName))
-	initializeErr := fmt.Errorf(fmt.Sprintf(
-		"initializing cert-manager-webhook-%s failed",
-		solverReferenceName,
-	))
+	initializeErr := fmt.Errorf("initializing cert-manager-webhook-%s failed", solverReferenceName)
 
 	select {
 	case <-s.context.Done():

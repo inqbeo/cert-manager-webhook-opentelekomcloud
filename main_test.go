@@ -36,14 +36,10 @@ func TestRunsSuite(t *testing.T) {
 		acmetest.SetAllowAmbientCredentials(false),
 		acmetest.SetManifestPath("testdata/opentelekomcloud"),
 
-		// Open Telekom Cloud DNS does not permit multiple TXT Records with the same name
-		// in the same Record Set. The 'Present' challenge request in solver.go is updating
-		// the Challenge Key value, if a TXT Record is with the same name is found in the Record Set.
-		// For that reason, SetStrict option has to be set to 'false' in Open Telekom Cloud tests.
-		// If set to 'true' the tests will **not** simulate creating and deleting multiple TXT Records
-		// but updating the value of 'cert-manager-dns01-tests.example.com' with the new Challenge Key value.
-		// That leads to skipping Extended/DeleteOneRetainsOthers test of the RunConformance suite.
-		acmetest.SetStrict(false),
+		// Open Telekom Cloud DNS keeps all values of a name in one TXT record set.
+		// Present adds its value to that record set and CleanUp removes only its
+		// own, so the strict Extended/DeletingOneRecordRetainsOthers test applies.
+		acmetest.SetStrict(true),
 	)
 
 	fixture.RunConformance(t)
