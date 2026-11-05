@@ -147,6 +147,59 @@ spec:
 
 Deploy the manifest above with `kubectl`.
 
+### Private zones
+
+By default the webhook writes the challenge records to the **public** zone of the name. For a CA that resolves
+Open Telekom Cloud **private** zones, e.g. an internal ACME CA in a VPC the private zone is associated with, set
+`zoneType` in the `config` stanza of that CA's issuer:
+
+- `public`, the default when left out: only public zones are used, exactly as without this setting
+- `private`: only private zones are used. If there is no private zone of the name, or more than one (one per VPC),
+  the challenge fails rather than guessing
+- `auto`: the public zone of the name, or the private one if there is no public zone of that name. With a public and
+  a private zone of the same name (split-horizon), `auto` uses the public one; use `private` if the CA resolves the
+  private zone
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: opentelekomcloud-internal-ca
+spec:
+  acme:
+    email: user@example.com
+    server: https://acme.ca.internal.example.com/acme/directory
+    caBundle: <base64 encoded CA certificate>
+    privateKeySecretRef:
+      name: opentelekomcloud-internal-ca-tls-key
+    solvers:
+    - dns01:
+        webhook:
+          groupName: acme.opentelekomcloud.com
+          solverName: opentelekomcloud
+          config:
+            region: "eu-de"
+            zoneType: private
+            accessKeySecretRef:
+              name: cert-manager-webhook-opentelekomcloud-creds
+              key: accessKey
+            secretKeySecretRef:
+              name: cert-manager-webhook-opentelekomcloud-creds
+              key: secretKey
+```
+
+> [!IMPORTANT]
+> cert-manager, not the webhook, finds the zone of a name (`ResolvedZone`) by looking up its SOA record through the
+> nameservers in its `--dns01-recursive-nameservers` flag (or those of its pod), for all issuers alike. Before it asks
+> the CA to validate, it checks that the challenge record has propagated, by default by asking the authoritative
+> nameservers of the zone. For a private zone:
+>
+> - the recursive nameservers must answer from that zone, e.g. the Open Telekom Cloud internal resolvers
+>   `100.125.4.25` and `100.125.129.199` from a VPC the private zone is associated with. Mind that they then
+>   answer from the private zone for every name that has one, for the issuers of public CAs as well
+> - the nameservers of a private zone are not reachable as such, so set `--dns01-recursive-nameservers-only` to have
+>   the propagation check ask the recursive nameservers as well
+
 ### Certificate
 
 In cert-manager, the `Certificate` resource represents a human readable definition of a certificate request. 
