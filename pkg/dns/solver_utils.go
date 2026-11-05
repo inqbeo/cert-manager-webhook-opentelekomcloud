@@ -137,21 +137,41 @@ func (s *OpenTelekomCloudDnsProviderSolver) getSecret(namespace string, secretKe
 	return string(data), nil
 }
 
+// getResolvedZone returns the zone the challenge records of ch are written to,
+// looking for a public or a private zone as the zoneType of the solver config
+// says.
 func (s *OpenTelekomCloudDnsProviderSolver) getResolvedZone(ch *v1alpha1.ChallengeRequest) (*zones.Zone, error) {
-	action := strings.ToLower(string(ch.Action))
-
-	listOpts := zones.ListOpts{
-		Name: ch.ResolvedZone,
+	config, err := loadConfig(ch.Config)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateZoneType(config.ZoneType); err != nil {
+		return nil, err
 	}
 
-	allPages, err := zones.List(s.dnsClient, listOpts).AllPages()
+	var zone *zones.Zone
+	switch config.ZoneType {
+	case zoneTypePrivate:
+		zone, err = s.getPrivateZone(ch)
+	case zoneTypeAuto:
+		zone, err = s.getPublicOrPrivateZone(ch)
+	default:
+		zone, err = s.getPublicZone(ch)
+	}
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("%s up failed", action))
+		return nil, err
 	}
 
-	allZones, err := zones.ExtractZones(allPages)
+	klog.InfoS("resolved zone", "zone", ch.ResolvedZone, "zoneType", config.ZoneType, "zoneID", zone.ID, "zoneName", zone.Name, "foundZoneType", zone.ZoneType)
+	return zone, nil
+}
+
+// getPublicZone looks the zone up as the webhook always did: the API lists
+// only public zones when no type is given.
+func (s *OpenTelekomCloudDnsProviderSolver) getPublicZone(ch *v1alpha1.ChallengeRequest) (*zones.Zone, error) {
+	allZones, err := s.listZones(ch, "")
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("%s up failed", strings.ToLower(string(ch.Action))))
+		return nil, err
 	}
 
 	if len(allZones) < 1 {

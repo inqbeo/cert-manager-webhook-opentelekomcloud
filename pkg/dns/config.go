@@ -28,6 +28,7 @@ type OpenTelekomCloudDnsProviderConfig struct {
 	// `issuer.spec.acme.dns01.providers.webhook.config` field.
 	Region             string                    `json:"region,required"`
 	ProjectName        string                    `json:"projectName,omitempty"`
+	ZoneType           string                    `json:"zoneType,omitempty"`
 	AccessKeySecretRef *corev1.SecretKeySelector `json:"accessKeySecretRef,omitempty"`
 	SecretKeySecretRef *corev1.SecretKeySelector `json:"secretKeySecretRef,omitempty"`
 
